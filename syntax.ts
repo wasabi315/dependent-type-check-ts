@@ -42,17 +42,14 @@ export const Let = (
     body
   );
 
-export const Type: Term = { tag: "Type" };
+export const Type: Type = { tag: "Type" };
 
-export const Pi = (
-  domains: NonEmpty<[names: OneOrMore<Name>, type: Type]>,
-  body: Type
-): Type =>
-  domains.reduceRight(
-    (body, [names, domain]) =>
-      [names]
-        .flat()
-        .reduceRight((body, name) => ({ tag: "Pi", name, domain, body }), body),
+export const Pi = (domains: NonEmpty<[Name, Type] | Type>, body: Type): Type =>
+  domains.reduceRight<Term>(
+    (body, domain) =>
+      domain instanceof Array
+        ? { tag: "Pi", name: domain[0], domain: domain[1], body }
+        : { tag: "Pi", name: "_", domain: domain, body },
     body
   );
 
@@ -138,7 +135,9 @@ export const pretty = (prec: number, term: Term): string => {
       return parensIf(
         prec > ABS_LET_PREC,
         `let ${term.name}: ${pretty(ABS_LET_PREC, term.type)} =
-  ${pretty(ABS_LET_PREC, term.bound)};
+  ${pretty(ABS_LET_PREC, term.bound)}
+in
+
 ${pretty(ABS_LET_PREC, term.body)}`
       );
     case "Type":

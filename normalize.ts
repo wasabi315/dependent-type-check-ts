@@ -302,3 +302,92 @@ export const quoteSpine = (env: Env, head: Term, spine: Spine): Term => {
 
 export const normalize = (env: Env, term: Term): Term =>
   quote(env, evaluate(env, term));
+
+////////////////////////////////////////////////////////////////////////////////
+// Beta-eta conversion
+
+export const conv = (env: Env, t: Value, u: Value): boolean => {
+  if (t.tag === "VType" && u.tag === "VType") {
+    return true;
+  }
+  if (t.tag === "VNat" && u.tag === "VNat") {
+    return true;
+  }
+  if (t.tag === "VZero" && u.tag === "VZero") {
+    return true;
+  }
+  if (t.tag === "VSuc" && u.tag === "VSuc") {
+    return conv(env, t.n.force(), u.n.force());
+  }
+  if (t.tag === "VEq" && u.tag === "VEq") {
+    return (
+      conv(env, t.A.force(), u.A.force()) &&
+      conv(env, t.x.force(), u.x.force()) &&
+      conv(env, t.y.force(), u.y.force())
+    );
+  }
+  if (t.tag === "VRefl" && u.tag === "VRefl") {
+    return (
+      conv(env, t.A.force(), u.A.force()) && conv(env, t.x.force(), u.x.force())
+    );
+  }
+  if (t.tag === "VVar" && u.tag === "VVar") {
+    return t.name === u.name && convSpine(env, t.spine, u.spine);
+  }
+  if (t.tag === "VPi" && u.tag === "VPi") {
+    const x = freshen(env, t.name);
+    const v = wrap(VVar(x, SNil));
+    return (
+      conv(env, t.domain, u.domain) &&
+      conv({ ...env, [x]: v }, t.body(v), u.body(v))
+    );
+  }
+  if (t.tag === "VAbs" && u.tag === "VAbs") {
+    const x = freshen(env, t.name);
+    const v = wrap(VVar(x, SNil));
+    return conv({ ...env, [x]: v }, t.func(v), u.func(v));
+  }
+  // Eta
+  if (t.tag === "VAbs") {
+    const x = freshen(env, t.name);
+    const v = wrap(VVar(x, SNil));
+    return conv({ ...env, [x]: v }, t.func(v), VApp(u, v));
+  }
+  if (u.tag === "VAbs") {
+    const x = freshen(env, u.name);
+    const v = wrap(VVar(x, SNil));
+    return conv({ ...env, [x]: v }, VApp(t, v), u.func(v));
+  }
+  return false;
+};
+
+export const convSpine = (env: Env, r: Spine, s: Spine): boolean => {
+  if (r.tag === "SNil" && s.tag === "SNil") {
+    return true;
+  }
+  if (r.tag === "SApp" && s.tag === "SApp") {
+    return (
+      convSpine(env, r.spine, s.spine) &&
+      conv(env, r.arg.force(), s.arg.force())
+    );
+  }
+  if (r.tag === "SNatElim" && s.tag === "SNatElim") {
+    return (
+      convSpine(env, r.spine, s.spine) &&
+      conv(env, r.P.force(), s.P.force()) &&
+      conv(env, r.Pz.force(), s.Pz.force()) &&
+      conv(env, r.Ps.force(), s.Ps.force())
+    );
+  }
+  if (r.tag === "SEqElim" && s.tag === "SEqElim") {
+    return (
+      convSpine(env, r.spine, s.spine) &&
+      conv(env, r.A.force(), s.A.force()) &&
+      conv(env, r.x.force(), s.x.force()) &&
+      conv(env, r.P.force(), s.P.force()) &&
+      conv(env, r.Prefl.force(), s.Prefl.force()) &&
+      conv(env, r.y.force(), s.y.force())
+    );
+  }
+  return false;
+};

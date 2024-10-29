@@ -11,7 +11,7 @@ import {
   Num,
   pretty,
 } from "./syntax.ts";
-import { normalize } from "./normalize.ts";
+import { conv, evaluate, normalize } from "./normalize.ts";
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -19,7 +19,7 @@ const ex = Let(
   [
     [
       "plus",
-      Pi([[["_", "_"], Nat]], Nat),
+      Pi([Nat, Nat], Nat),
       Abs(
         ["m", "n"],
         App(NatElim, Abs("_", Nat), Var("n"), Abs("_", Suc), Var("m"))
@@ -27,7 +27,7 @@ const ex = Let(
     ],
     [
       "mult",
-      Pi([[["_", "_"], Nat]], Nat),
+      Pi([Nat, Nat], Nat),
       Abs(
         ["m", "n"],
         App(
