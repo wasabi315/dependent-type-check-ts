@@ -10,8 +10,11 @@ import {
   NatElim,
   Num,
   pretty,
+  Refl,
 } from "./syntax.ts";
-import { conv, evaluate, normalize } from "./normalize.ts";
+import { normalize, evaluate } from "./normalize.ts";
+import { check } from "./typecheck.ts";
+import { VNat, VEq, VNum } from "./value.ts";
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -47,3 +50,5 @@ console.log("-- pretty --\n");
 console.log(pretty(0, ex));
 console.log("\n-- normalized --\n");
 console.log(pretty(0, normalize({}, ex)));
+
+check({}, {}, App(Refl, Nat, Num(42)), VEq(VNat, evaluate({}, ex), VNum(42)));
