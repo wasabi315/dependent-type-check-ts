@@ -3,6 +3,7 @@ import {
   Env,
   SNil,
   VApp,
+  VArr,
   VEq,
   VNat,
   VPi,
@@ -35,18 +36,20 @@ export const check = (env: Env, ctx: Ctx, term: Term, type: VType): void => {
       );
     }
     case "Abs": {
-      if (type.tag === "VPi") {
-        const x = freshen(env, term.name);
-        const v = VVar(x, SNil);
-        return check(
-          { ...env, [term.name]: v },
-          { ...ctx, [term.name]: type.domain },
-          term.body,
-          type.body(v)
-        );
+      if (type.tag !== "VPi") {
+        break;
       }
+      const x = freshen(env, term.name);
+      const v = VVar(x, SNil);
+      return check(
+        { ...env, [term.name]: v },
+        { ...ctx, [term.name]: type.domain },
+        term.body,
+        type.body(v)
+      );
     }
   }
+
   const ty = infer(env, ctx, term);
   if (!conv(env, ty, type)) {
     throw new Error(
@@ -118,37 +121,33 @@ export const infer = (env: Env, ctx: Ctx, term: Term): VType => {
 export const sucType = VPi("_", VNat, (_) => VNat);
 
 // (P : Nat -> Type) -> P 0 -> ((n : Nat) -> P n -> P (suc n)) -> (n : Nat) -> P n
-export const natElimType = VPi(
-  "P",
-  VPi("_", VNat, (_) => VType),
-  (P) =>
-    VPi("Pz", VApp(P, VZero), (_) =>
-      VPi(
-        "Ps",
-        VPi("n", VNat, (n) => VPi("_", VApp(P, n), (_) => VApp(P, VSuc(n)))),
-        (_) => VPi("n", VNat, (n) => VApp(P, n))
-      )
+export const natElimType = VPi("P", VArr(VNat, VType), (P) =>
+  VArr(
+    VApp(P, VZero),
+    VArr(
+      VPi("n", VNat, (n) => VArr(VApp(P, n), VApp(P, VSuc(n)))),
+      VPi("n", VNat, (n) => VApp(P, n))
     )
+  )
 );
 
 // (A : Type) -> A -> A -> Type
-export const eqType = VPi("A", VType, (A) =>
-  VPi("_", A, (_) => VPi("_", A, (_) => VType))
-);
+export const eqType = VPi("A", VType, (A) => VArr(A, VArr(A, VType)));
 
 // (A : Type) (x : A) -> Eq A x x
 export const reflType = VPi("A", VType, (A) =>
   VPi("x", A, (x) => VEq(A, x, x))
 );
 
-// (A : Type) (x : A) (P : (y : A) -> Eq A x y -> Type) (Prefl : P x (refl A x)) (y : A) (p : Eq A x y) -> P y p
+// (A : Type) (x : A) (P : (y : A) -> Eq A x y -> Type) -> P x (refl A x) -> (y : A) (p : Eq A x y) -> P y p
 export const eqElimType = VPi("A", VType, (A) =>
   VPi("x", A, (x) =>
     VPi(
       "P",
-      VPi("y", A, (y) => VPi("_", VEq(A, x, y), (_) => VType)),
+      VPi("y", A, (y) => VArr(VEq(A, x, y), VType)),
       (P) =>
-        VPi("_", VApp(VApp(P, x), VRefl(A, x)), (_) =>
+        VArr(
+          VApp(VApp(P, x), VRefl(A, x)),
           VPi("y", A, (y) => VPi("p", VEq(A, x, y), (p) => VApp(VApp(P, y), p)))
         )
     )

@@ -59,6 +59,9 @@ export const VPi = (
   body: (dom: Value) => VType
 ): VType => ({ tag: "VPi", name, domain, body });
 
+export const VArr = (domain: VType, codomain: VType): VType =>
+  VPi("_", domain, (_) => codomain);
+
 export const VType: VType = { tag: "VType" };
 
 export const VNat: Value = { tag: "VNat" };

@@ -1,10 +1,10 @@
 export type Name = string;
 
-export const freshen = (dict: Record<Name, unknown>, name: Name): Name => {
+export const freshen = (env: Record<Name, unknown>, name: Name): Name => {
   if (name === "_") {
     return name;
   }
-  while (dict[name]) {
+  while (env[name]) {
     name += "'";
   }
   return name;
