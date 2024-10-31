@@ -1,10 +1,10 @@
 import { Name, freshen } from "./common.ts";
 
 ////////////////////////////////////////////////////////////////////////////////
-// Values and Spines
+// Values and Neutrals
 
 export type Value =
-  | { tag: "VVar"; name: Name; spine: Spine }
+  | { tag: "VNeutral"; neutral: Neutral }
   | { tag: "VAbs"; name: Name; func: (arg: Value) => Value }
   | { tag: "VPi"; name: Name; domain: VType; body: (dom: Value) => VType }
   | { tag: "VType" }
@@ -16,24 +16,24 @@ export type Value =
 
 export type VType = Value;
 
-export type Spine =
-  | { tag: "SNil" }
-  | { tag: "SApp"; spine: Spine; arg: Value }
+export type Neutral =
+  | { tag: "NVar"; name: Name }
+  | { tag: "NApp"; func: Neutral; arg: Value }
   | {
-      tag: "SNatElim";
+      tag: "NNatElim";
       P: VType;
       Pz: Value;
       Ps: Value;
-      spine: Spine;
+      n: Neutral;
     }
   | {
-      tag: "SEqElim";
+      tag: "NEqElim";
       A: VType;
       x: Value;
       P: VType;
       Prefl: Value;
       y: Value;
-      spine: Spine;
+      p: Neutral;
     };
 
 export type Env = Record<Name, Value>;
@@ -41,10 +41,9 @@ export type Env = Record<Name, Value>;
 ////////////////////////////////////////////////////////////////////////////////
 // Constructors
 
-export const VVar = (name: Name, spine: Spine): Value => ({
-  tag: "VVar",
-  name,
-  spine,
+export const VNeutral = (neutral: Neutral): Value => ({
+  tag: "VNeutral",
+  neutral,
 });
 
 export const VAbs = (name: Name, func: (arg: Value) => Value): Value => ({
@@ -91,36 +90,38 @@ export const VRefl = (A: VType, x: Value): Value => ({
   x,
 });
 
-export const SNil: Spine = { tag: "SNil" };
+export const NVar = (name: Name): Neutral => ({ tag: "NVar", name });
 
-export const SApp = (spine: Spine, arg: Value): Spine => ({
-  tag: "SApp",
-  spine,
+export const NApp = (func: Neutral, arg: Value): Neutral => ({
+  tag: "NApp",
+  func,
   arg,
 });
 
-export const SNatElim = (
+export const NNatElim = (
   P: VType,
   Pz: Value,
   Ps: Value,
-  spine: Spine
-): Spine => ({ tag: "SNatElim", P, Pz, Ps, spine });
+  n: Neutral
+): Neutral => ({ tag: "NNatElim", P, Pz, Ps, n });
 
-export const SEqElim = (
+export const NEqElim = (
   A: VType,
   x: Value,
   P: VType,
   Prefl: Value,
   y: Value,
-  spine: Spine
-): Spine => ({ tag: "SEqElim", A, x, P, Prefl, y, spine });
+  p: Neutral
+): Neutral => ({ tag: "NEqElim", A, x, P, Prefl, y, p });
 
 ////////////////////////////////////////////////////////////////////////////////
 
+export const VVar = (name: Name): Value => VNeutral(NVar(name));
+
 export const VApp = (func: Value, arg: Value): Value => {
   switch (func.tag) {
-    case "VVar":
-      return VVar(func.name, SApp(func.spine, arg));
+    case "VNeutral":
+      return VNeutral(NApp(func.neutral, arg));
     case "VAbs":
       return func.func(arg);
   }
@@ -129,8 +130,8 @@ export const VApp = (func: Value, arg: Value): Value => {
 
 export const VNatElim = (P: VType, Pz: Value, Ps: Value, n: Value): Value => {
   switch (n.tag) {
-    case "VVar":
-      return VVar(n.name, SNatElim(P, Pz, Ps, n.spine));
+    case "VNeutral":
+      return VNeutral(NNatElim(P, Pz, Ps, n.neutral));
     case "VZero":
       return Pz;
     case "VSuc":
@@ -148,8 +149,8 @@ export const VEqElim = (
   p: Value
 ): Value => {
   switch (p.tag) {
-    case "VVar":
-      return VVar(p.name, SEqElim(A, x, P, Prefl, y, p.spine));
+    case "VNeutral":
+      return VNeutral(NEqElim(A, x, P, Prefl, y, p.neutral));
     case "VRefl":
       return Prefl;
   }
@@ -178,12 +179,12 @@ export const conv = (env: Env, t: Value, u: Value): boolean => {
   if (t.tag === "VRefl" && u.tag === "VRefl") {
     return conv(env, t.A, u.A) && conv(env, t.x, u.x);
   }
-  if (t.tag === "VVar" && u.tag === "VVar") {
-    return t.name === u.name && convSpine(env, t.spine, u.spine);
+  if (t.tag === "VNeutral" && u.tag === "VNeutral") {
+    return convNeutral(env, t.neutral, u.neutral);
   }
   if (t.tag === "VPi" && u.tag === "VPi") {
     const x = freshen(env, t.name);
-    const v = VVar(x, SNil);
+    const v = VVar(x);
     return (
       conv(env, t.domain, u.domain) &&
       conv({ ...env, [x]: v }, t.body(v), u.body(v))
@@ -191,46 +192,46 @@ export const conv = (env: Env, t: Value, u: Value): boolean => {
   }
   if (t.tag === "VAbs" && u.tag === "VAbs") {
     const x = freshen(env, t.name);
-    const v = VVar(x, SNil);
+    const v = VVar(x);
     return conv({ ...env, [x]: v }, t.func(v), u.func(v));
   }
   // Eta
   if (t.tag === "VAbs") {
     const x = freshen(env, t.name);
-    const v = VVar(x, SNil);
+    const v = VVar(x);
     return conv({ ...env, [x]: v }, t.func(v), VApp(u, v));
   }
   if (u.tag === "VAbs") {
     const x = freshen(env, u.name);
-    const v = VVar(x, SNil);
+    const v = VVar(x);
     return conv({ ...env, [x]: v }, VApp(t, v), u.func(v));
   }
   return false;
 };
 
-export const convSpine = (env: Env, r: Spine, s: Spine): boolean => {
-  if (r.tag === "SNil" && s.tag === "SNil") {
-    return true;
+export const convNeutral = (env: Env, m: Neutral, n: Neutral): boolean => {
+  if (m.tag === "NVar" && n.tag === "NVar") {
+    return m.name === n.name;
   }
-  if (r.tag === "SApp" && s.tag === "SApp") {
-    return convSpine(env, r.spine, s.spine) && conv(env, r.arg, s.arg);
+  if (m.tag === "NApp" && n.tag === "NApp") {
+    return convNeutral(env, m.func, n.func) && conv(env, m.arg, n.arg);
   }
-  if (r.tag === "SNatElim" && s.tag === "SNatElim") {
+  if (m.tag === "NNatElim" && n.tag === "NNatElim") {
     return (
-      convSpine(env, r.spine, s.spine) &&
-      conv(env, r.P, s.P) &&
-      conv(env, r.Pz, s.Pz) &&
-      conv(env, r.Ps, s.Ps)
+      convNeutral(env, m.n, n.n) &&
+      conv(env, m.P, n.P) &&
+      conv(env, m.Pz, n.Pz) &&
+      conv(env, m.Ps, n.Ps)
     );
   }
-  if (r.tag === "SEqElim" && s.tag === "SEqElim") {
+  if (m.tag === "NEqElim" && n.tag === "NEqElim") {
     return (
-      convSpine(env, r.spine, s.spine) &&
-      conv(env, r.A, s.A) &&
-      conv(env, r.x, s.x) &&
-      conv(env, r.P, s.P) &&
-      conv(env, r.Prefl, s.Prefl) &&
-      conv(env, r.y, s.y)
+      convNeutral(env, m.p, n.p) &&
+      conv(env, m.A, n.A) &&
+      conv(env, m.x, n.x) &&
+      conv(env, m.P, n.P) &&
+      conv(env, m.Prefl, n.Prefl) &&
+      conv(env, m.y, n.y)
     );
   }
   return false;

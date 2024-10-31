@@ -1,7 +1,6 @@
 import { Name, freshen } from "./common.ts";
 import {
   Env,
-  SNil,
   VApp,
   VArr,
   VEq,
@@ -40,7 +39,7 @@ export const check = (env: Env, ctx: Ctx, term: Term, type: VType): void => {
         break;
       }
       const x = freshen(env, term.name);
-      const v = VVar(x, SNil);
+      const v = VVar(x);
       return check(
         { ...env, [term.name]: v },
         { ...ctx, [term.name]: type.domain },
@@ -91,7 +90,7 @@ export const infer = (env: Env, ctx: Ctx, term: Term): VType => {
       return VType;
     case "Pi": {
       check(env, ctx, term.domain, VType);
-      const v = VVar(term.name, SNil);
+      const v = VVar(term.name);
       const domainValue = evaluate(env, term.domain);
       check(
         { ...env, [term.name]: v },

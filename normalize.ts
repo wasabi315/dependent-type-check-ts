@@ -19,8 +19,7 @@ import {
   Value,
   VEqElim,
   VNatElim,
-  Spine,
-  SNil,
+  Neutral,
   VApp,
   VAbs,
   VEq,
@@ -90,16 +89,16 @@ export const evaluate = (env: Env, term: Term): Value => {
 
 export const quote = (env: Env, value: Value): Term => {
   switch (value.tag) {
-    case "VVar":
-      return quoteSpine(env, Var(value.name), value.spine);
+    case "VNeutral":
+      return quoteNeutral(env, value.neutral);
     case "VAbs": {
       const x = freshen(env, value.name);
-      const v = VVar(x, SNil);
+      const v = VVar(x);
       return Abs(x, quote({ ...env, [value.name]: v }, value.func(v)));
     }
     case "VPi": {
       const x = freshen(env, value.name);
-      const v = VVar(x, SNil);
+      const v = VVar(x);
       return Pi(
         [[x, quote(env, value.domain)]],
         quote({ ...env, [value.name]: v }, value.body(v))
@@ -125,29 +124,29 @@ export const quote = (env: Env, value: Value): Term => {
   }
 };
 
-export const quoteSpine = (env: Env, head: Term, spine: Spine): Term => {
-  switch (spine.tag) {
-    case "SNil":
-      return head;
-    case "SApp":
-      return App(quoteSpine(env, head, spine.spine), quote(env, spine.arg));
-    case "SNatElim":
+export const quoteNeutral = (env: Env, neutral: Neutral): Term => {
+  switch (neutral.tag) {
+    case "NVar":
+      return Var(neutral.name);
+    case "NApp":
+      return App(quoteNeutral(env, neutral.func), quote(env, neutral.arg));
+    case "NNatElim":
       return App(
         NatElim,
-        quote(env, spine.P),
-        quote(env, spine.Pz),
-        quote(env, spine.Ps),
-        quoteSpine(env, head, spine.spine)
+        quote(env, neutral.P),
+        quote(env, neutral.Pz),
+        quote(env, neutral.Ps),
+        quoteNeutral(env, neutral.n)
       );
-    case "SEqElim":
+    case "NEqElim":
       return App(
         EqElim,
-        quote(env, spine.A),
-        quote(env, spine.x),
-        quote(env, spine.P),
-        quote(env, spine.Prefl),
-        quote(env, spine.y),
-        quoteSpine(env, head, spine.spine)
+        quote(env, neutral.A),
+        quote(env, neutral.x),
+        quote(env, neutral.P),
+        quote(env, neutral.Prefl),
+        quote(env, neutral.y),
+        quoteNeutral(env, neutral.p)
       );
   }
 };
