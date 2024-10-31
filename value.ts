@@ -1,12 +1,17 @@
-import { Name, freshen } from "./common.ts";
+import { Name, freshen, Lazy, wrap } from "./common.ts";
 
 ////////////////////////////////////////////////////////////////////////////////
 // Values and Neutrals
 
 export type Value =
   | { tag: "VNeutral"; neutral: Neutral }
-  | { tag: "VAbs"; name: Name; func: (arg: Value) => Value }
-  | { tag: "VPi"; name: Name; domain: VType; body: (dom: Value) => VType }
+  | { tag: "VAbs"; param: Name; func: (arg: Value) => Value }
+  | {
+      tag: "VPi";
+      param: Name;
+      domain: VType;
+      codom: (arg: VType) => VType;
+    }
   | { tag: "VType" }
   | { tag: "VNat" }
   | { tag: "VZero" }
@@ -36,7 +41,7 @@ export type Neutral =
       p: Neutral;
     };
 
-export type Env = Record<Name, Value>;
+export type Env = Record<Name, Lazy<Value>>;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Constructors
@@ -46,20 +51,20 @@ export const VNeutral = (neutral: Neutral): Value => ({
   neutral,
 });
 
-export const VAbs = (name: Name, func: (arg: Value) => Value): Value => ({
+export const VAbs = (param: Name, func: (arg: Value) => Value): Value => ({
   tag: "VAbs",
-  name,
+  param,
   func,
 });
 
 export const VPi = (
-  name: Name,
+  param: Name,
   domain: VType,
-  body: (dom: Value) => VType
-): VType => ({ tag: "VPi", name, domain, body });
+  codom: (arg: Value) => VType
+): VType => ({ tag: "VPi", param, domain, codom });
 
-export const VArr = (domain: VType, codomain: VType): VType =>
-  VPi("_", domain, (_) => codomain);
+export const VArr = (domain: VType, codom: VType): VType =>
+  VPi("_", domain, (_) => codom);
 
 export const VType: VType = { tag: "VType" };
 
@@ -70,11 +75,11 @@ export const VZero: Value = { tag: "VZero" };
 export const VSuc = (n: Value): Value => ({ tag: "VSuc", n });
 
 export const VNum = (n: number): Value => {
-  let value: Value = VZero;
+  let v: Value = VZero;
   for (let i = 0; i < n; i++) {
-    value = VSuc(value);
+    v = VSuc(v);
   }
-  return value;
+  return v;
 };
 
 export const VEq = (A: VType, x: Value, y: Value): Value => ({
@@ -135,9 +140,9 @@ export const VNatElim = (P: VType, Pz: Value, Ps: Value, n: Value): Value => {
     case "VZero":
       return Pz;
     case "VSuc":
-      return VApp(VApp(Ps, n), VNatElim(P, Pz, Ps, n.n));
+      return VApp(VApp(Ps, n.n), VNatElim(P, Pz, Ps, n.n));
   }
-  throw new Error("Not a number");
+  throw new Error("Not a natural number");
 };
 
 export const VEqElim = (
@@ -160,51 +165,71 @@ export const VEqElim = (
 ////////////////////////////////////////////////////////////////////////////////
 // Beta-eta conversion
 
-export const conv = (env: Env, t: Value, u: Value): boolean => {
-  if (t.tag === "VType" && u.tag === "VType") {
+export const conv = (env: Env, term1: Value, term2: Value): boolean => {
+  if (term1.tag === "VType" && term2.tag === "VType") {
     return true;
   }
-  if (t.tag === "VNat" && u.tag === "VNat") {
+  if (term1.tag === "VNat" && term2.tag === "VNat") {
     return true;
   }
-  if (t.tag === "VZero" && u.tag === "VZero") {
+  if (term1.tag === "VZero" && term2.tag === "VZero") {
     return true;
   }
-  if (t.tag === "VSuc" && u.tag === "VSuc") {
-    return conv(env, t.n, u.n);
+  if (term1.tag === "VSuc" && term2.tag === "VSuc") {
+    return conv(env, term1.n, term2.n);
   }
-  if (t.tag === "VEq" && u.tag === "VEq") {
-    return conv(env, t.A, u.A) && conv(env, t.x, u.x) && conv(env, t.y, u.y);
-  }
-  if (t.tag === "VRefl" && u.tag === "VRefl") {
-    return conv(env, t.A, u.A) && conv(env, t.x, u.x);
-  }
-  if (t.tag === "VNeutral" && u.tag === "VNeutral") {
-    return convNeutral(env, t.neutral, u.neutral);
-  }
-  if (t.tag === "VPi" && u.tag === "VPi") {
-    const x = freshen(env, t.name);
-    const v = VVar(x);
+  if (term1.tag === "VEq" && term2.tag === "VEq") {
     return (
-      conv(env, t.domain, u.domain) &&
-      conv({ ...env, [x]: v }, t.body(v), u.body(v))
+      conv(env, term1.A, term2.A) &&
+      conv(env, term1.x, term2.x) &&
+      conv(env, term1.y, term2.y)
     );
   }
-  if (t.tag === "VAbs" && u.tag === "VAbs") {
-    const x = freshen(env, t.name);
-    const v = VVar(x);
-    return conv({ ...env, [x]: v }, t.func(v), u.func(v));
+  if (term1.tag === "VRefl" && term2.tag === "VRefl") {
+    return conv(env, term1.A, term2.A) && conv(env, term1.x, term2.x);
+  }
+  if (term1.tag === "VNeutral" && term2.tag === "VNeutral") {
+    return convNeutral(env, term1.neutral, term2.neutral);
+  }
+  if (term1.tag === "VPi" && term2.tag === "VPi") {
+    const param = freshen(env, term1.param);
+    const vParam = VVar(param);
+    return (
+      conv(env, term1.domain, term2.domain) &&
+      conv(
+        { ...env, [param]: wrap(vParam) },
+        term1.codom(vParam),
+        term2.codom(vParam)
+      )
+    );
+  }
+  if (term1.tag === "VAbs" && term2.tag === "VAbs") {
+    const param = freshen(env, term1.param);
+    const vParam = VVar(param);
+    return conv(
+      { ...env, [param]: wrap(vParam) },
+      term1.func(vParam),
+      term2.func(vParam)
+    );
   }
   // Eta
-  if (t.tag === "VAbs") {
-    const x = freshen(env, t.name);
-    const v = VVar(x);
-    return conv({ ...env, [x]: v }, t.func(v), VApp(u, v));
+  if (term1.tag === "VAbs") {
+    const param = freshen(env, term1.param);
+    const vParam = VVar(param);
+    return conv(
+      { ...env, [param]: wrap(vParam) },
+      term1.func(vParam),
+      VApp(term2, vParam)
+    );
   }
-  if (u.tag === "VAbs") {
-    const x = freshen(env, u.name);
-    const v = VVar(x);
-    return conv({ ...env, [x]: v }, VApp(t, v), u.func(v));
+  if (term2.tag === "VAbs") {
+    const param = freshen(env, term2.param);
+    const vParam = VVar(param);
+    return conv(
+      { ...env, [param]: wrap(vParam) },
+      VApp(term1, vParam),
+      term2.func(vParam)
+    );
   }
   return false;
 };

@@ -6,10 +6,10 @@ import { Name, OneOrMore, NonEmpty } from "./common.ts";
 export type Term =
   | { tag: "Var"; name: Name } // x
   | { tag: "App"; func: Term; arg: Term } // t u
-  | { tag: "Abs"; name: Name; body: Term } // λx. t
+  | { tag: "Abs"; param: Name; body: Term } // λx. t
   | { tag: "Let"; name: Name; type: Type; bound: Term; body: Term } // let x: a = t in u
   | { tag: "Type" } // Type
-  | { tag: "Pi"; name: Name; domain: Type; body: Type } // (x : A) → B
+  | { tag: "Pi"; param: Name; domain: Type; codom: Type } // (x : A) → B
   | { tag: "Nat" } // Natural number
   | { tag: "Zero" } // 0
   | { tag: "Suc" } // 1 + _
@@ -31,7 +31,7 @@ export const App = (func: Term, ...args: Term[]): Term =>
 export const Abs = (params: OneOrMore<Name>, body: Term): Term =>
   [params]
     .flat()
-    .reduceRight((body, name) => ({ tag: "Abs", name, body }), body);
+    .reduceRight((body, param) => ({ tag: "Abs", param, body }), body);
 
 export const Let = (
   bindings: NonEmpty<[name: Name, type: Type, bound: Term]>,
@@ -44,13 +44,13 @@ export const Let = (
 
 export const Type: Type = { tag: "Type" };
 
-export const Pi = (domains: NonEmpty<[Name, Type] | Type>, body: Type): Type =>
+export const Pi = (domains: NonEmpty<[Name, Type] | Type>, codom: Type): Type =>
   domains.reduceRight<Term>(
-    (body, domain) =>
+    (codom, domain) =>
       domain instanceof Array
-        ? { tag: "Pi", name: domain[0], domain: domain[1], body }
-        : { tag: "Pi", name: "_", domain: domain, body },
-    body
+        ? { tag: "Pi", param: domain[0], domain: domain[1], codom }
+        : { tag: "Pi", param: "_", domain: domain, codom },
+    codom
   );
 
 export const Nat: Type = { tag: "Nat" };
@@ -89,17 +89,17 @@ export const pretty = (prec: number, term: Term): string => {
   const prettyAbs = (firstParam: Name, body: Term): string => {
     const params = [firstParam];
     while (body.tag === "Abs") {
-      params.push(body.name);
+      params.push(body.param);
       body = body.body;
     }
     return `λ ${params.join(" ")}. ${pretty(ABS_LET_PREC, body)}`;
   };
 
-  const prettyPi = (firstDom: [Name, Type], body: Type): string => {
-    const domains = [firstDom];
-    while (body.tag === "Pi" && body.name !== "_") {
-      domains.push([body.name, body.domain]);
-      body = body.body;
+  const prettyPi = (firstDomain: [Name, Type], body: Type): string => {
+    const domains = [firstDomain];
+    while (body.tag === "Pi" && body.param !== "_") {
+      domains.push([body.param, body.domain]);
+      body = body.codom;
     }
     return `${domains
       .map(([name, domain]) => `(${name}: ${pretty(PI_PREC, domain)})`)
@@ -130,7 +130,7 @@ export const pretty = (prec: number, term: Term): string => {
         `${pretty(APP_PREC, term.func)} ${pretty(APP_PREC + 1, term.arg)}`
       );
     case "Abs":
-      return parensIf(prec > ABS_LET_PREC, prettyAbs(term.name, term.body));
+      return parensIf(prec > ABS_LET_PREC, prettyAbs(term.param, term.body));
     case "Let":
       return parensIf(
         prec > ABS_LET_PREC,
@@ -143,15 +143,15 @@ ${pretty(ABS_LET_PREC, term.body)}`
     case "Type":
       return "Type";
     case "Pi":
-      if (term.name === "_") {
+      if (term.param === "_") {
         return parensIf(
           prec > PI_PREC,
-          `${pretty(APP_PREC, term.domain)} → ${pretty(PI_PREC, term.body)}`
+          `${pretty(APP_PREC, term.domain)} → ${pretty(PI_PREC, term.codom)}`
         );
       }
       return parensIf(
         prec > PI_PREC,
-        prettyPi([term.name, term.domain], term.body)
+        prettyPi([term.param, term.domain], term.codom)
       );
     case "Nat":
       return "Nat";

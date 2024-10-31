@@ -1,4 +1,4 @@
-import { freshen } from "./common.ts";
+import { freshen, lazy, wrap } from "./common.ts";
 import {
   Term,
   Type,
@@ -38,23 +38,25 @@ import {
 export const evaluate = (env: Env, term: Term): Value => {
   switch (term.tag) {
     case "Var":
-      return env[term.name];
+      return env[term.name].value;
     case "App":
       return VApp(evaluate(env, term.func), evaluate(env, term.arg));
     case "Abs":
-      return VAbs(term.name, (arg) =>
-        evaluate({ ...env, [term.name]: arg }, term.body)
+      return VAbs(term.param, (arg) =>
+        evaluate({ ...env, [term.param]: wrap(arg) }, term.body)
       );
     case "Let": {
-      const bound = evaluate(env, term.bound);
+      const bound = lazy(() => evaluate(env, term.bound));
       return evaluate({ ...env, [term.name]: bound }, term.body);
     }
     case "Type":
       return VType;
-    case "Pi":
-      return VPi(term.name, evaluate(env, term.domain), (dom) =>
-        evaluate({ ...env, [term.name]: dom }, term.body)
+    case "Pi": {
+      const domain = evaluate(env, term.domain);
+      return VPi(term.param, domain, (dom) =>
+        evaluate({ ...env, [term.param]: wrap(dom) }, term.codom)
       );
+    }
     case "Nat":
       return VNat;
     case "Zero":
@@ -92,16 +94,19 @@ export const quote = (env: Env, value: Value): Term => {
     case "VNeutral":
       return quoteNeutral(env, value.neutral);
     case "VAbs": {
-      const x = freshen(env, value.name);
-      const v = VVar(x);
-      return Abs(x, quote({ ...env, [value.name]: v }, value.func(v)));
+      const param = freshen(env, value.param);
+      const vParam = VVar(param);
+      return Abs(
+        param,
+        quote({ ...env, [value.param]: wrap(vParam) }, value.func(vParam))
+      );
     }
     case "VPi": {
-      const x = freshen(env, value.name);
-      const v = VVar(x);
+      const param = freshen(env, value.param);
+      const vParam = VVar(param);
       return Pi(
-        [[x, quote(env, value.domain)]],
-        quote({ ...env, [value.name]: v }, value.body(v))
+        [[param, quote(env, value.domain)]],
+        quote({ ...env, [value.param]: wrap(vParam) }, value.codom(vParam))
       );
     }
     case "VType":

@@ -1,4 +1,4 @@
-import { Name, freshen } from "./common.ts";
+import { Name, freshen, Lazy, wrap, lazy } from "./common.ts";
 import {
   Env,
   VApp,
@@ -18,18 +18,18 @@ import { Term, pretty } from "./syntax.ts";
 
 ////////////////////////////////////////////////////////////////////////////////
 
-export type Ctx = Record<Name, VType>;
+export type Ctx = Record<Name, Lazy<VType>>;
 
 export const check = (env: Env, ctx: Ctx, term: Term, type: VType): void => {
   switch (term.tag) {
     case "Let": {
       check(env, ctx, term.type, VType);
-      const vt = evaluate(env, term.type);
-      check(env, ctx, term.bound, vt);
-      const v = evaluate(env, term.bound);
+      const vType = evaluate(env, term.type);
+      check(env, ctx, term.bound, vType);
+      const vBound = lazy(() => evaluate(env, term.bound));
       return check(
-        { ...env, [term.name]: v },
-        { ...ctx, [term.name]: vt },
+        { ...env, [term.name]: vBound },
+        { ...ctx, [term.name]: wrap(vType) },
         term.body,
         type
       );
@@ -38,13 +38,13 @@ export const check = (env: Env, ctx: Ctx, term: Term, type: VType): void => {
       if (type.tag !== "VPi") {
         break;
       }
-      const x = freshen(env, term.name);
-      const v = VVar(x);
+      const param = freshen(env, term.param);
+      const vParam = VVar(param);
       return check(
-        { ...env, [term.name]: v },
-        { ...ctx, [term.name]: type.domain },
+        { ...env, [term.param]: wrap(vParam) },
+        { ...ctx, [term.param]: wrap(type.domain) },
         term.body,
-        type.body(v)
+        type.codom(vParam)
       );
     }
   }
@@ -52,7 +52,7 @@ export const check = (env: Env, ctx: Ctx, term: Term, type: VType): void => {
   const ty = infer(env, ctx, term);
   if (!conv(env, ty, type)) {
     throw new Error(
-      `type mismatch: ${pretty(0, quote(env, ty))} != ${pretty(
+      `Type mismatch: ${pretty(0, quote(env, ty))} != ${pretty(
         0,
         quote(env, type)
       )} when checking ${pretty(0, term)}`
@@ -63,26 +63,26 @@ export const check = (env: Env, ctx: Ctx, term: Term, type: VType): void => {
 export const infer = (env: Env, ctx: Ctx, term: Term): VType => {
   switch (term.tag) {
     case "Var":
-      return ctx[term.name];
+      return ctx[term.name].value;
     case "App": {
       const funcType = infer(env, ctx, term.func);
       if (funcType.tag !== "VPi") {
-        throw new Error(`expected a function`);
+        throw new Error(`Expected a function`);
       }
       check(env, ctx, term.arg, funcType.domain);
       const argValue = evaluate(env, term.arg);
-      return funcType.body(argValue);
+      return funcType.codom(argValue);
     }
     case "Abs":
-      throw new Error(`can't infer type of abstraction`);
+      throw new Error(`Can't infer type of abstraction`);
     case "Let": {
       check(env, ctx, term.type, VType);
-      const vt = evaluate(env, term.type);
-      check(env, ctx, term.bound, vt);
-      const v = evaluate(env, term.bound);
+      const vType = evaluate(env, term.type);
+      check(env, ctx, term.bound, vType);
+      const vBound = lazy(() => evaluate(env, term.bound));
       return infer(
-        { ...env, [term.name]: v },
-        { ...ctx, [term.name]: vt },
+        { ...env, [term.name]: vBound },
+        { ...ctx, [term.name]: wrap(vType) },
         term.body
       );
     }
@@ -90,12 +90,12 @@ export const infer = (env: Env, ctx: Ctx, term: Term): VType => {
       return VType;
     case "Pi": {
       check(env, ctx, term.domain, VType);
-      const v = VVar(term.name);
-      const domainValue = evaluate(env, term.domain);
+      const vParam = wrap(VVar(term.param));
+      const vDomain = lazy(() => evaluate(env, term.domain));
       check(
-        { ...env, [term.name]: v },
-        { ...ctx, [term.name]: domainValue },
-        term.body,
+        { ...env, [term.param]: vParam },
+        { ...ctx, [term.param]: vDomain },
+        term.codom,
         VType
       );
       return VType;
@@ -117,7 +117,7 @@ export const infer = (env: Env, ctx: Ctx, term: Term): VType => {
   }
 };
 
-export const sucType = VPi("_", VNat, (_) => VNat);
+export const sucType = VArr(VNat, VNat);
 
 // (P : Nat -> Type) -> P 0 -> ((n : Nat) -> P n -> P (suc n)) -> (n : Nat) -> P n
 export const natElimType = VPi("P", VArr(VNat, VType), (P) =>
