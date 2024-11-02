@@ -21,7 +21,7 @@ export type Term =
 export type Type = Term;
 
 ////////////////////////////////////////////////////////////////////////////////
-// Constructors
+// (Sugared) Constructors
 
 export const Var = (name: Name): Term => ({ tag: "Var", name });
 

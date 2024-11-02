@@ -63,6 +63,9 @@ export const check = (env: Env, ctx: Ctx, term: Term, type: VType): void => {
 export const infer = (env: Env, ctx: Ctx, term: Term): VType => {
   switch (term.tag) {
     case "Var":
+      if (!ctx[term.name]) {
+        throw new Error(`Unknown variable "${term.name}"`);
+      }
       return ctx[term.name].value;
     case "App": {
       const funcType = infer(env, ctx, term.func);

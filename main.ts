@@ -11,10 +11,13 @@ import {
   Num,
   pretty,
   Refl,
+  Eq,
+  Type,
+  EqElim,
 } from "./syntax.ts";
-import { normalize, evaluate } from "./normalize.ts";
+import { normalize } from "./normalize.ts";
 import { check } from "./typecheck.ts";
-import { VNat, VEq, VNum } from "./value.ts";
+import { VNat } from "./value.ts";
 
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -43,6 +46,55 @@ const ex = Let(
       )
     ),
   ],
+  [
+    "cong",
+    Pi(
+      ["A", Type],
+      ["B", Type],
+      ["f", Pi(Var("A"), Var("B"))],
+      ["x", Var("A")],
+      ["y", Var("A")],
+      App(Eq, Var("A"), Var("x"), Var("y")),
+      App(Eq, Var("B"), App(Var("f"), Var("x")), App(Var("f"), Var("y")))
+    ),
+    Abs(
+      "A",
+      "B",
+      "f",
+      "x",
+      App(
+        EqElim,
+        Var("A"),
+        Var("x"),
+        Abs(
+          "y",
+          "_",
+          App(Eq, Var("B"), App(Var("f"), Var("x")), App(Var("f"), Var("y")))
+        ),
+        App(Refl, Var("B"), App(Var("f"), Var("x")))
+      )
+    ),
+  ],
+  [
+    "plus-identity-right",
+    Pi(["n", Nat], App(Eq, Nat, App(Var("plus"), Var("n"), Zero), Var("n"))),
+    App(
+      NatElim,
+      Abs("n", App(Eq, Nat, App(Var("plus"), Var("n"), Zero), Var("n"))),
+      App(Refl, Nat, Zero),
+      Abs(
+        "n",
+        App(
+          Var("cong"),
+          Nat,
+          Nat,
+          Suc,
+          App(Var("plus"), Var("n"), Zero),
+          Var("n")
+        )
+      )
+    ),
+  ],
   App(Var("plus"), Num(2), App(Var("mult"), Num(8), Num(5)))
 );
 
@@ -50,5 +102,6 @@ console.log("-- pretty --\n");
 console.log(pretty(0, ex));
 console.log("\n-- normalized --\n");
 console.log(pretty(0, normalize({}, ex)));
-
-check({}, {}, App(Refl, Nat, Num(42)), VEq(VNat, evaluate({}, ex), VNum(42)));
+console.log("\n-- typecheck --\n");
+check({}, {}, ex, VNat);
+console.log("OK");
