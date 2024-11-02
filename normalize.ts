@@ -38,7 +38,7 @@ import {
 export const evaluate = (env: Env, term: Term): Value => {
   switch (term.tag) {
     case "Var":
-      return env[term.name].value;
+      return env[term.name_].value;
     case "App":
       return VApp(evaluate(env, term.func), evaluate(env, term.arg));
     case "Abs":
@@ -47,7 +47,7 @@ export const evaluate = (env: Env, term: Term): Value => {
       );
     case "Let": {
       const bound = lazy(() => evaluate(env, term.bound));
-      return evaluate({ ...env, [term.name]: bound }, term.body);
+      return evaluate({ ...env, [term.name_]: bound }, term.body);
     }
     case "Type":
       return VType;

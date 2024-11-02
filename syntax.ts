@@ -4,10 +4,10 @@ import { Name, NonEmpty } from "./common.ts";
 // Terms
 
 export type Term =
-  | { tag: "Var"; name: Name } // x
+  | { tag: "Var"; name_: Name } // x
   | { tag: "App"; func: Term; arg: Term } // t u
   | { tag: "Abs"; param: Name; body: Term } // λx. t
-  | { tag: "Let"; name: Name; type: Type; bound: Term; body: Term } // let x: a = t in u
+  | { tag: "Let"; name_: Name; type: Type; bound: Term; body: Term } // let x: a = t in u
   | { tag: "Type" } // Type
   | { tag: "Pi"; param: Name; domain: Type; codom: Type } // (x : A) → B
   | { tag: "Nat" } // Natural number
@@ -23,68 +23,91 @@ export type Type = Term;
 ////////////////////////////////////////////////////////////////////////////////
 // (Sugared) Constructors
 
-export const Var = (name: Name): Term => ({ tag: "Var", name });
+export type AppTerm = Term & { (...args: Term[]): AppTerm };
 
-export const App = (func: Term, ...args: Term[]): Term =>
-  args.reduce((func, arg) => ({ tag: "App", func, arg }), func);
+export const toAppTerm = (term: Term): AppTerm => {
+  const appTerm = (...args: Term[]): AppTerm => App(term, ...args);
+  return Object.assign(appTerm, term);
+};
 
-export const Abs = (...paramsBody: [...NonEmpty<Name>, Term]): Term => {
+export const Var = (name: Name): AppTerm =>
+  toAppTerm({ tag: "Var", name_: name });
+
+export const App = (func: Term, ...args: Term[]): AppTerm =>
+  toAppTerm(args.reduce((func, arg) => ({ tag: "App", func, arg }), func));
+
+export const Abs = (...paramsBody: [...NonEmpty<Name>, Term]): AppTerm => {
   const params = paramsBody.slice(0, -1) as NonEmpty<Name>;
   const body = paramsBody[paramsBody.length - 1] as Term;
-  return params.reduceRight(
-    (body, param) => ({ tag: "Abs", param, body }),
-    body
+  return toAppTerm(
+    params.reduceRight((body, param) => ({ tag: "Abs", param, body }), body)
   );
 };
 
 export const Let = (
   ...bindingsBody: [...NonEmpty<[Name, Type, Term]>, Term]
-): Term => {
+): AppTerm => {
   const bindings = bindingsBody.slice(0, -1) as NonEmpty<[Name, Type, Term]>;
   const body = bindingsBody[bindingsBody.length - 1] as Term;
-  return bindings.reduceRight(
-    (body, [name, type, bound]) => ({ tag: "Let", name, type, bound, body }),
-    body
+  return toAppTerm(
+    bindings.reduceRight(
+      (body, [name_, type, bound]) => ({
+        tag: "Let",
+        name_,
+        type,
+        bound,
+        body,
+      }),
+      body
+    )
   );
 };
 
-export const Type: Type = { tag: "Type" };
+export const Type: AppTerm = toAppTerm({ tag: "Type" });
 
 export const Pi = (
-  ...domainsCodom: [...NonEmpty<[Name, Type] | Type>, Type]
-): Type => {
-  const domains = domainsCodom.slice(0, -1) as NonEmpty<[Name, Type] | Type>;
+  ...domainsCodom: [...NonEmpty<[...NonEmpty<Name>, Type] | Type>, Type]
+): AppTerm => {
+  const domains = domainsCodom.slice(0, -1) as NonEmpty<
+    [...NonEmpty<Name>, Type] | Type
+  >;
   const codom = domainsCodom[domainsCodom.length - 1] as Type;
-  return domains.reduceRight<Type>(
-    (codom, domain) =>
-      domain instanceof Array
-        ? { tag: "Pi", param: domain[0], domain: domain[1], codom }
-        : { tag: "Pi", param: "_", domain, codom },
-    codom
+  return toAppTerm(
+    domains.reduceRight<Type>((codom, domain) => {
+      if (!(domain instanceof Array)) {
+        return { tag: "Pi", param: "_", domain, codom };
+      }
+      const params = domain.slice(0, -1) as NonEmpty<Name>;
+      const domainType = domain[domain.length - 1] as Type;
+      return params.reduceRight(
+        (codom, param) => ({ tag: "Pi", param, domain: domainType, codom }),
+        codom
+      );
+    }, codom)
   );
 };
 
-export const Nat: Type = { tag: "Nat" };
+export const Nat: AppTerm = toAppTerm({ tag: "Nat" });
 
-export const Zero: Term = { tag: "Zero" };
+export const Zero: AppTerm = toAppTerm({ tag: "Zero" });
 
-export const Suc: Term = { tag: "Suc" };
+export const Suc: AppTerm = toAppTerm({ tag: "Suc" });
 
-export const Num = (n: number): Term => {
-  let term: Term = Zero;
+export const Num = (n: number): AppTerm => {
+  let term: AppTerm = Zero;
   for (let i = 0; i < n; i++) {
-    term = App(Suc, term);
+    term = Suc(term);
   }
   return term;
 };
 
-export const NatElim: Term = { tag: "NatElim" };
+export const NatElim: AppTerm = toAppTerm({ tag: "NatElim" });
 
-export const Eq: Type = { tag: "Eq" };
+export const Eq: AppTerm = toAppTerm({ tag: "Eq" });
 
-export const Refl: Term = { tag: "Refl" };
+export const Refl: AppTerm = toAppTerm({ tag: "Refl" });
 
-export const EqElim: Term = { tag: "EqElim" };
+export const EqElim: AppTerm = toAppTerm({ tag: "EqElim" });
 
 ////////////////////////////////////////////////////////////////////////////////
 // Pretty-printing
@@ -131,7 +154,7 @@ export const pretty = (prec: number, term: Term): string => {
 
   switch (term.tag) {
     case "Var":
-      return term.name;
+      return term.name_;
     case "App":
       if (term.func.tag === "Suc") {
         return prettySuc(prec, term.arg);
@@ -145,7 +168,7 @@ export const pretty = (prec: number, term: Term): string => {
     case "Let":
       return parensIf(
         prec > ABS_LET_PREC,
-        `let ${term.name}: ${pretty(ABS_LET_PREC, term.type)} =
+        `let ${term.name_}: ${pretty(ABS_LET_PREC, term.type)} =
   ${pretty(ABS_LET_PREC, term.bound)}
 in
 
