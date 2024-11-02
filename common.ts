@@ -33,5 +33,3 @@ export const lazy = <T>(f: () => T): Lazy<T> =>
 // Utils
 
 export type NonEmpty<T> = [T, ...T[]];
-
-export type OneOrMore<T> = T | NonEmpty<T>;

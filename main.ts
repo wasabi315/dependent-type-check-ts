@@ -20,28 +20,28 @@ import { VNat, VEq, VNum } from "./value.ts";
 
 const ex = Let(
   [
-    [
-      "plus",
-      Pi([Nat, Nat], Nat),
-      Abs(
-        ["m", "n"],
-        App(NatElim, Abs("_", Nat), Var("n"), Abs("_", Suc), Var("m"))
-      ),
-    ],
-    [
-      "mult",
-      Pi([Nat, Nat], Nat),
-      Abs(
-        ["m", "n"],
-        App(
-          NatElim,
-          Abs("_", Nat),
-          Zero,
-          Abs("_", App(Var("plus"), Var("n"))),
-          Var("m")
-        )
-      ),
-    ],
+    "plus",
+    Pi(Nat, Nat, Nat),
+    Abs(
+      "m",
+      "n",
+      App(NatElim, Abs("_", Nat), Var("n"), Abs("_", Suc), Var("m"))
+    ),
+  ],
+  [
+    "mult",
+    Pi(Nat, Nat, Nat),
+    Abs(
+      "m",
+      "n",
+      App(
+        NatElim,
+        Abs("_", Nat),
+        Zero,
+        Abs("_", App(Var("plus"), Var("n"))),
+        Var("m")
+      )
+    ),
   ],
   App(Var("plus"), Num(2), App(Var("mult"), Num(8), Num(5)))
 );

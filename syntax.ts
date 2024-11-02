@@ -1,4 +1,4 @@
-import { Name, OneOrMore, NonEmpty } from "./common.ts";
+import { Name, NonEmpty } from "./common.ts";
 
 ////////////////////////////////////////////////////////////////////////////////
 // Terms
@@ -28,30 +28,41 @@ export const Var = (name: Name): Term => ({ tag: "Var", name });
 export const App = (func: Term, ...args: Term[]): Term =>
   args.reduce((func, arg) => ({ tag: "App", func, arg }), func);
 
-export const Abs = (params: OneOrMore<Name>, body: Term): Term =>
-  [params]
-    .flat()
-    .reduceRight((body, param) => ({ tag: "Abs", param, body }), body);
+export const Abs = (...paramsBody: [...NonEmpty<Name>, Term]): Term => {
+  const params = paramsBody.slice(0, -1) as NonEmpty<Name>;
+  const body = paramsBody[paramsBody.length - 1] as Term;
+  return params.reduceRight(
+    (body, param) => ({ tag: "Abs", param, body }),
+    body
+  );
+};
 
 export const Let = (
-  bindings: NonEmpty<[name: Name, type: Type, bound: Term]>,
-  body: Term
-): Term =>
-  bindings.reduceRight(
+  ...bindingsBody: [...NonEmpty<[Name, Type, Term]>, Term]
+): Term => {
+  const bindings = bindingsBody.slice(0, -1) as NonEmpty<[Name, Type, Term]>;
+  const body = bindingsBody[bindingsBody.length - 1] as Term;
+  return bindings.reduceRight(
     (body, [name, type, bound]) => ({ tag: "Let", name, type, bound, body }),
     body
   );
+};
 
 export const Type: Type = { tag: "Type" };
 
-export const Pi = (domains: NonEmpty<[Name, Type] | Type>, codom: Type): Type =>
-  domains.reduceRight<Term>(
+export const Pi = (
+  ...domainsCodom: [...NonEmpty<[Name, Type] | Type>, Type]
+): Type => {
+  const domains = domainsCodom.slice(0, -1) as NonEmpty<[Name, Type] | Type>;
+  const codom = domainsCodom[domainsCodom.length - 1] as Type;
+  return domains.reduceRight<Type>(
     (codom, domain) =>
       domain instanceof Array
         ? { tag: "Pi", param: domain[0], domain: domain[1], codom }
-        : { tag: "Pi", param: "_", domain: domain, codom },
+        : { tag: "Pi", param: "_", domain, codom },
     codom
   );
+};
 
 export const Nat: Type = { tag: "Nat" };
 

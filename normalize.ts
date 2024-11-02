@@ -105,7 +105,7 @@ export const quote = (env: Env, value: Value): Term => {
       const param = freshen(env, value.param);
       const vParam = VVar(param);
       return Pi(
-        [[param, quote(env, value.domain)]],
+        [param, quote(env, value.domain)],
         quote({ ...env, [value.param]: wrap(vParam) }, value.codom(vParam))
       );
     }
