@@ -110,22 +110,21 @@ export const quote = (env: Env, value: Value): Term => {
       );
     }
     case "VType":
-      return Type;
+      return Type();
     case "VNat":
-      return Nat;
+      return Nat();
     case "VZero":
-      return Zero;
+      return Zero();
     case "VSuc":
-      return App(Suc, quote(env, value.n));
+      return Suc()(quote(env, value.n));
     case "VEq":
-      return App(
-        Eq,
+      return Eq()(
         quote(env, value.A),
         quote(env, value.x),
         quote(env, value.y)
       );
     case "VRefl":
-      return App(Refl, quote(env, value.A), quote(env, value.x));
+      return Refl()(quote(env, value.A), quote(env, value.x));
   }
 };
 
@@ -136,16 +135,14 @@ export const quoteNeutral = (env: Env, neutral: Neutral): Term => {
     case "NApp":
       return App(quoteNeutral(env, neutral.func), quote(env, neutral.arg));
     case "NNatElim":
-      return App(
-        NatElim,
+      return NatElim()(
         quote(env, neutral.P),
         quote(env, neutral.Pz),
         quote(env, neutral.Ps),
         quoteNeutral(env, neutral.n)
       );
     case "NEqElim":
-      return App(
-        EqElim,
+      return EqElim()(
         quote(env, neutral.A),
         quote(env, neutral.x),
         quote(env, neutral.P),

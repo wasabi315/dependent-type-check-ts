@@ -1,4 +1,4 @@
-import { Name, freshen, Lazy, wrap, lazy } from "./common.ts";
+import { Name, freshen, Lazy, wrap, lazy, TypeCheckError } from "./common.ts";
 import {
   Env,
   VApp,
@@ -21,42 +21,49 @@ import { Term, pretty } from "./syntax.ts";
 export type Ctx = Record<Name, Lazy<VType>>;
 
 export const check = (env: Env, ctx: Ctx, term: Term, type: VType): void => {
-  switch (term.tag) {
-    case "Let": {
-      check(env, ctx, term.type, VType);
-      const vType = evaluate(env, term.type);
-      check(env, ctx, term.bound, vType);
-      const vBound = lazy(() => evaluate(env, term.bound));
-      return check(
-        { ...env, [term.name_]: vBound },
-        { ...ctx, [term.name_]: wrap(vType) },
-        term.body,
-        type
-      );
-    }
-    case "Abs": {
-      if (type.tag !== "VPi") {
-        break;
+  try {
+    switch (term.tag) {
+      case "Let": {
+        check(env, ctx, term.type, VType);
+        const vType = evaluate(env, term.type);
+        check(env, ctx, term.bound, vType);
+        const vBound = lazy(() => evaluate(env, term.bound));
+        return check(
+          { ...env, [term.name_]: vBound },
+          { ...ctx, [term.name_]: wrap(vType) },
+          term.body,
+          type
+        );
       }
-      const param = freshen(env, term.param);
-      const vParam = VVar(param);
-      return check(
-        { ...env, [term.param]: wrap(vParam) },
-        { ...ctx, [term.param]: wrap(type.domain) },
-        term.body,
-        type.codom(vParam)
+      case "Abs": {
+        if (type.tag !== "VPi") {
+          break;
+        }
+        const param = freshen(env, term.param);
+        const vParam = VVar(param);
+        return check(
+          { ...env, [term.param]: wrap(vParam) },
+          { ...ctx, [term.param]: wrap(type.domain) },
+          term.body,
+          type.codom(vParam)
+        );
+      }
+    }
+
+    const ty = infer(env, ctx, term);
+    if (!conv(env, ty, type)) {
+      throw new TypeCheckError(
+        `Type mismatch:
+    When checking ${pretty(0, term)}
+    Expected: ${pretty(0, quote(env, type))}
+    Actual: ${pretty(0, quote(env, ty))}`
       );
     }
-  }
-
-  const ty = infer(env, ctx, term);
-  if (!conv(env, ty, type)) {
-    throw new Error(
-      `Type mismatch: ${pretty(0, quote(env, ty))} != ${pretty(
-        0,
-        quote(env, type)
-      )} when checking ${pretty(0, term)}`
-    );
+  } catch (e) {
+    if (e instanceof TypeCheckError && !e.pos) {
+      e.pos = term.pos;
+    }
+    throw e;
   }
 };
 
@@ -64,20 +71,20 @@ export const infer = (env: Env, ctx: Ctx, term: Term): VType => {
   switch (term.tag) {
     case "Var":
       if (!ctx[term.name_]) {
-        throw new Error(`Unknown variable "${term.name_}"`);
+        throw new TypeCheckError(`Unknown variable "${term.name_}"`);
       }
       return ctx[term.name_].value;
     case "App": {
       const funcType = infer(env, ctx, term.func);
       if (funcType.tag !== "VPi") {
-        throw new Error(`Expected a function`);
+        throw new TypeCheckError(`Expected a function`);
       }
       check(env, ctx, term.arg, funcType.domain);
       const argValue = evaluate(env, term.arg);
       return funcType.codom(argValue);
     }
     case "Abs":
-      throw new Error(`Can't infer type of abstraction`);
+      throw new TypeCheckError(`Can't infer type of abstraction`);
     case "Let": {
       check(env, ctx, term.type, VType);
       const vType = evaluate(env, term.type);

@@ -3,7 +3,7 @@ import { Name, NonEmpty } from "./common.ts";
 ////////////////////////////////////////////////////////////////////////////////
 // Terms
 
-export type Term =
+export type Term = { pos?: string } & (
   | { tag: "Var"; name_: Name } // x
   | { tag: "App"; func: Term; arg: Term } // t u
   | { tag: "Abs"; param: Name; body: Term } // λx. t
@@ -16,98 +16,120 @@ export type Term =
   | { tag: "NatElim" } // Standard eliminator for natural numbers
   | { tag: "Eq" } // Equality
   | { tag: "Refl" } // Reflextivity
-  | { tag: "EqElim" }; // Standard eliminator for equality, also known as J
+  | { tag: "EqElim" }
+); // Standard eliminator for equality
 
 export type Type = Term;
 
 ////////////////////////////////////////////////////////////////////////////////
 // (Sugared) Constructors
 
-export type AppTerm = Term & { (...args: Term[]): AppTerm };
+export type AppTerm = Term & { (...args: NonEmpty<Term>): AppTerm };
 
-export const toAppTerm = (term: Term): AppTerm => {
-  const appTerm = (...args: Term[]): AppTerm => App(term, ...args);
-  return Object.assign(appTerm, term);
+export const toAppTerm = (term: Term): AppTerm =>
+  Object.assign(App.bind(null, term), term);
+
+const attachPos = (term: Term): Term => {
+  // Ref: https://stackoverflow.com/questions/2343343/how-can-i-determine-the-current-line-number-in-javascript
+  const err = new Error();
+  const stack = err!.stack!.split(/\r\n|\n/);
+  const pos = stack[3].split("at ")[1];
+  term.pos = pos;
+  return term;
+};
+
+const splitLast = <T extends Array<unknown>, R>(arr: [...T, R]): [T, R] => {
+  const init = arr.slice(0, -1) as T;
+  const last = arr.at(-1) as R;
+  return [init, last];
 };
 
 export const Var = (name: Name): AppTerm =>
-  toAppTerm({ tag: "Var", name_: name });
+  toAppTerm(attachPos({ tag: "Var", name_: name }));
 
 export const App = (func: Term, ...args: Term[]): AppTerm =>
-  toAppTerm(args.reduce((func, arg) => ({ tag: "App", func, arg }), func));
+  toAppTerm(
+    attachPos(args.reduce((func, arg) => ({ tag: "App", func, arg }), func))
+  );
 
 export const Abs = (...paramsBody: [...NonEmpty<Name>, Term]): AppTerm => {
-  const params = paramsBody.slice(0, -1) as NonEmpty<Name>;
-  const body = paramsBody[paramsBody.length - 1] as Term;
+  const [params, body] = splitLast(paramsBody);
   return toAppTerm(
-    params.reduceRight((body, param) => ({ tag: "Abs", param, body }), body)
+    attachPos(
+      params.reduceRight((body, param) => ({ tag: "Abs", param, body }), body)
+    )
   );
 };
 
 export const Let = (
   ...bindingsBody: [...NonEmpty<[Name, Type, Term]>, Term]
 ): AppTerm => {
-  const bindings = bindingsBody.slice(0, -1) as NonEmpty<[Name, Type, Term]>;
-  const body = bindingsBody[bindingsBody.length - 1] as Term;
+  const [bindings, body] = splitLast(bindingsBody);
   return toAppTerm(
-    bindings.reduceRight(
-      (body, [name_, type, bound]) => ({
-        tag: "Let",
-        name_,
-        type,
-        bound,
-        body,
-      }),
-      body
+    attachPos(
+      bindings.reduceRight(
+        (body, [name_, type, bound]) => ({
+          tag: "Let",
+          name_,
+          type,
+          bound,
+          body,
+        }),
+        body
+      )
     )
   );
 };
 
-export const Type: AppTerm = toAppTerm({ tag: "Type" });
+const _Type: Term = { tag: "Type" };
+export const Type: () => AppTerm = () => toAppTerm(attachPos(_Type));
 
 export const Pi = (
   ...domainsCodom: [...NonEmpty<[...NonEmpty<Name>, Type] | Type>, Type]
 ): AppTerm => {
-  const domains = domainsCodom.slice(0, -1) as NonEmpty<
-    [...NonEmpty<Name>, Type] | Type
-  >;
-  const codom = domainsCodom[domainsCodom.length - 1] as Type;
+  const [domains, codom] = splitLast(domainsCodom);
   return toAppTerm(
-    domains.reduceRight<Type>((codom, domain) => {
-      if (!(domain instanceof Array)) {
-        return { tag: "Pi", param: "_", domain, codom };
-      }
-      const params = domain.slice(0, -1) as NonEmpty<Name>;
-      const domainType = domain[domain.length - 1] as Type;
-      return params.reduceRight(
-        (codom, param) => ({ tag: "Pi", param, domain: domainType, codom }),
-        codom
-      );
-    }, codom)
+    attachPos(
+      domains.reduceRight<Type>((codom, domain) => {
+        if (!(domain instanceof Array)) {
+          return { tag: "Pi", param: "_", domain, codom };
+        }
+        const [params, domainType] = splitLast(domain);
+        return params.reduceRight(
+          (codom, param) => ({ tag: "Pi", param, domain: domainType, codom }),
+          codom
+        );
+      }, codom)
+    )
   );
 };
 
-export const Nat: AppTerm = toAppTerm({ tag: "Nat" });
+const _Nat: Term = { tag: "Nat" };
+export const Nat: () => AppTerm = () => toAppTerm(attachPos(_Nat));
 
-export const Zero: AppTerm = toAppTerm({ tag: "Zero" });
+const _Zero: Term = { tag: "Zero" };
+export const Zero: () => AppTerm = () => toAppTerm(attachPos(_Zero));
 
-export const Suc: AppTerm = toAppTerm({ tag: "Suc" });
+const _Suc: Term = { tag: "Suc" };
+export const Suc: () => AppTerm = () => toAppTerm(attachPos(_Suc));
 
 export const Num = (n: number): AppTerm => {
-  let term: AppTerm = Zero;
+  let term: Term = _Zero;
   for (let i = 0; i < n; i++) {
-    term = Suc(term);
+    term = { tag: "App", func: _Suc, arg: term };
   }
-  return term;
+  return toAppTerm(attachPos(term));
 };
 
-export const NatElim: AppTerm = toAppTerm({ tag: "NatElim" });
+export const NatElim: () => AppTerm = () =>
+  toAppTerm(attachPos({ tag: "NatElim" }));
 
-export const Eq: AppTerm = toAppTerm({ tag: "Eq" });
+export const Eq: () => AppTerm = () => toAppTerm(attachPos({ tag: "Eq" }));
 
-export const Refl: AppTerm = toAppTerm({ tag: "Refl" });
+export const Refl: () => AppTerm = () => toAppTerm(attachPos({ tag: "Refl" }));
 
-export const EqElim: AppTerm = toAppTerm({ tag: "EqElim" });
+export const EqElim: () => AppTerm = () =>
+  toAppTerm(attachPos({ tag: "EqElim" }));
 
 ////////////////////////////////////////////////////////////////////////////////
 // Pretty-printing

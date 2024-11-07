@@ -33,3 +33,12 @@ export const lazy = <T>(f: () => T): Lazy<T> =>
 // Utils
 
 export type NonEmpty<T> = [T, ...T[]];
+
+// Error
+
+export class TypeCheckError extends Error {
+  constructor(message: string, public pos?: string) {
+    super(message);
+    Object.setPrototypeOf(this, TypeCheckError.prototype);
+  }
+}
