@@ -162,6 +162,30 @@ export const VEqElim = (
   throw new Error("Not an equality");
 };
 
+export const VSucAbs = VAbs("n", (n) => VSuc(n));
+
+export const VNatElimAbs = VAbs("P", (P) =>
+  VAbs("Pz", (Pz) =>
+    VAbs("Ps", (Ps) => VAbs("n", (n) => VNatElim(P, Pz, Ps, n)))
+  )
+);
+
+export const VEqAbs = VAbs("A", (A) =>
+  VAbs("x", (x) => VAbs("y", (y) => VEq(A, x, y)))
+);
+
+export const VReflAbs = VAbs("A", (A) => VAbs("x", (x) => VRefl(A, x)));
+
+export const VEqElimAbs = VAbs("A", (A) =>
+  VAbs("x", (x) =>
+    VAbs("P", (P) =>
+      VAbs("Prefl", (Prefl) =>
+        VAbs("y", (y) => VAbs("p", (p) => VEqElim(A, x, P, Prefl, y, p)))
+      )
+    )
+  )
+);
+
 ////////////////////////////////////////////////////////////////////////////////
 // Beta-eta conversion
 

@@ -17,16 +17,16 @@ import {
 import {
   Env,
   Value,
-  VEqElim,
-  VNatElim,
+  VEqElimAbs,
+  VNatElimAbs,
   Neutral,
   VApp,
   VAbs,
-  VEq,
+  VEqAbs,
   VNat,
   VPi,
-  VRefl,
-  VSuc,
+  VReflAbs,
+  VSucAbs,
   VType,
   VVar,
   VZero,
@@ -62,27 +62,15 @@ export const evaluate = (env: Env, term: Term): Value => {
     case "Zero":
       return VZero;
     case "Suc":
-      return VAbs("n", (n) => VSuc(n));
+      return VSucAbs;
     case "NatElim":
-      return VAbs("P", (P) =>
-        VAbs("Pz", (Pz) =>
-          VAbs("Ps", (Ps) => VAbs("n", (n) => VNatElim(P, Pz, Ps, n)))
-        )
-      );
+      return VNatElimAbs;
     case "Eq":
-      return VAbs("A", (A) => VAbs("x", (x) => VAbs("y", (y) => VEq(A, x, y))));
+      return VEqAbs;
     case "Refl":
-      return VAbs("A", (A) => VAbs("x", (x) => VRefl(A, x)));
+      return VReflAbs;
     case "EqElim":
-      return VAbs("A", (A) =>
-        VAbs("x", (x) =>
-          VAbs("P", (P) =>
-            VAbs("Prefl", (Prefl) =>
-              VAbs("y", (y) => VAbs("p", (p) => VEqElim(A, x, P, Prefl, y, p)))
-            )
-          )
-        )
-      );
+      return VEqElimAbs;
   }
 };
 

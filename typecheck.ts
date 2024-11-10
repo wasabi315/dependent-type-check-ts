@@ -60,8 +60,8 @@ export const check = (env: Env, ctx: Ctx, term: Term, type: VType): void => {
       );
     }
   } catch (e) {
-    if (e instanceof TypeCheckError && !e.pos) {
-      e.pos = term.pos;
+    if (e instanceof TypeCheckError) {
+      e.pos ??= term.pos;
     }
     throw e;
   }
@@ -80,8 +80,8 @@ export const infer = (env: Env, ctx: Ctx, term: Term): VType => {
         throw new TypeCheckError(`Expected a function`);
       }
       check(env, ctx, term.arg, funcType.domain);
-      const argValue = evaluate(env, term.arg);
-      return funcType.codom(argValue);
+      const vArg = evaluate(env, term.arg);
+      return funcType.codom(vArg);
     }
     case "Abs":
       throw new TypeCheckError(`Can't infer type of abstraction`);

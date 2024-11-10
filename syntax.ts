@@ -61,8 +61,10 @@ export const Abs = (...paramsBody: [...NonEmpty<Name>, Term]): AppTerm => {
   );
 };
 
+export type Definition = [Name, Type, Term];
+
 export const Let = (
-  ...bindingsBody: [...NonEmpty<[Name, Type, Term]>, Term]
+  ...bindingsBody: [...NonEmpty<Definition>, Term]
 ): AppTerm => {
   const [bindings, body] = splitLast(bindingsBody);
   return toAppTerm(
@@ -81,8 +83,7 @@ export const Let = (
   );
 };
 
-const _Type: Term = { tag: "Type" };
-export const Type: () => AppTerm = () => toAppTerm(attachPos(_Type));
+export const Type: () => AppTerm = () => toAppTerm(attachPos({ tag: "Type" }));
 
 export const Pi = (
   ...domainsCodom: [...NonEmpty<[...NonEmpty<Name>, Type] | Type>, Type]
@@ -104,19 +105,16 @@ export const Pi = (
   );
 };
 
-const _Nat: Term = { tag: "Nat" };
-export const Nat: () => AppTerm = () => toAppTerm(attachPos(_Nat));
+export const Nat: () => AppTerm = () => toAppTerm(attachPos({ tag: "Nat" }));
 
-const _Zero: Term = { tag: "Zero" };
-export const Zero: () => AppTerm = () => toAppTerm(attachPos(_Zero));
+export const Zero: () => AppTerm = () => toAppTerm(attachPos({ tag: "Zero" }));
 
-const _Suc: Term = { tag: "Suc" };
-export const Suc: () => AppTerm = () => toAppTerm(attachPos(_Suc));
+export const Suc: () => AppTerm = () => toAppTerm(attachPos({ tag: "Suc" }));
 
 export const Num = (n: number): AppTerm => {
-  let term: Term = _Zero;
+  let term: Term = { tag: "Zero" };
   for (let i = 0; i < n; i++) {
-    term = { tag: "App", func: _Suc, arg: term };
+    term = { tag: "App", func: { tag: "Suc" }, arg: term };
   }
   return toAppTerm(attachPos(term));
 };
