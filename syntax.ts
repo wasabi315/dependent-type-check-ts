@@ -3,7 +3,9 @@ import { Name, NonEmpty } from "./common.ts";
 ////////////////////////////////////////////////////////////////////////////////
 // Terms
 
-export type Term = { pos?: string } & (
+export type WithPos<T> = T & { pos?: string };
+
+export type Term = WithPos<
   | { tag: "Var"; name_: Name } // x
   | { tag: "App"; func: Term; arg: Term } // t u
   | { tag: "Abs"; param: Name; body: Term } // λx. t
@@ -16,8 +18,8 @@ export type Term = { pos?: string } & (
   | { tag: "NatElim" } // Standard eliminator for natural numbers
   | { tag: "Eq" } // Equality
   | { tag: "Refl" } // Reflextivity
-  | { tag: "EqElim" }
-); // Standard eliminator for equality
+  | { tag: "EqElim" } // Standard eliminator for equality, also known as J
+>;
 
 export type Type = Term;
 
@@ -29,7 +31,7 @@ export type AppTerm = Term & { (...args: NonEmpty<Term>): AppTerm };
 export const toAppTerm = (term: Term): AppTerm =>
   Object.assign(App.bind(null, term), term);
 
-const attachPos = (term: Term): Term => {
+const attachPos = <T extends Term>(term: T): T => {
   // Ref: https://stackoverflow.com/questions/2343343/how-can-i-determine-the-current-line-number-in-javascript
   const err = new Error();
   const stack = err!.stack!.split(/\r\n|\n/);
@@ -45,17 +47,17 @@ const splitLast = <T extends Array<unknown>, R>(arr: [...T, R]): [T, R] => {
 };
 
 export const Var = (name: Name): AppTerm =>
-  toAppTerm(attachPos({ tag: "Var", name_: name }));
+  attachPos(toAppTerm({ tag: "Var", name_: name }));
 
-export const App = (func: Term, ...args: Term[]): AppTerm =>
-  toAppTerm(
-    attachPos(args.reduce((func, arg) => ({ tag: "App", func, arg }), func))
+export const App = (func: Term, ...args: NonEmpty<Term>): AppTerm =>
+  attachPos(
+    toAppTerm(args.reduce((func, arg) => ({ tag: "App", func, arg }), func))
   );
 
 export const Abs = (...paramsBody: [...NonEmpty<Name>, Term]): AppTerm => {
   const [params, body] = splitLast(paramsBody);
-  return toAppTerm(
-    attachPos(
+  return attachPos(
+    toAppTerm(
       params.reduceRight((body, param) => ({ tag: "Abs", param, body }), body)
     )
   );
@@ -67,8 +69,8 @@ export const Let = (
   ...bindingsBody: [...NonEmpty<Definition>, Term]
 ): AppTerm => {
   const [bindings, body] = splitLast(bindingsBody);
-  return toAppTerm(
-    attachPos(
+  return attachPos(
+    toAppTerm(
       bindings.reduceRight(
         (body, [name_, type, bound]) => ({
           tag: "Let",
@@ -83,14 +85,14 @@ export const Let = (
   );
 };
 
-export const Type: () => AppTerm = () => toAppTerm(attachPos({ tag: "Type" }));
+export const Type: () => AppTerm = () => attachPos(toAppTerm({ tag: "Type" }));
 
 export const Pi = (
   ...domainsCodom: [...NonEmpty<[...NonEmpty<Name>, Type] | Type>, Type]
 ): AppTerm => {
   const [domains, codom] = splitLast(domainsCodom);
-  return toAppTerm(
-    attachPos(
+  return attachPos(
+    toAppTerm(
       domains.reduceRight<Type>((codom, domain) => {
         if (!(domain instanceof Array)) {
           return { tag: "Pi", param: "_", domain, codom };
@@ -105,29 +107,29 @@ export const Pi = (
   );
 };
 
-export const Nat: () => AppTerm = () => toAppTerm(attachPos({ tag: "Nat" }));
+export const Nat: () => AppTerm = () => attachPos(toAppTerm({ tag: "Nat" }));
 
-export const Zero: () => AppTerm = () => toAppTerm(attachPos({ tag: "Zero" }));
+export const Zero: () => AppTerm = () => attachPos(toAppTerm({ tag: "Zero" }));
 
-export const Suc: () => AppTerm = () => toAppTerm(attachPos({ tag: "Suc" }));
+export const Suc: () => AppTerm = () => attachPos(toAppTerm({ tag: "Suc" }));
 
 export const Num = (n: number): AppTerm => {
   let term: Term = { tag: "Zero" };
   for (let i = 0; i < n; i++) {
     term = { tag: "App", func: { tag: "Suc" }, arg: term };
   }
-  return toAppTerm(attachPos(term));
+  return attachPos(toAppTerm(term));
 };
 
 export const NatElim: () => AppTerm = () =>
-  toAppTerm(attachPos({ tag: "NatElim" }));
+  attachPos(toAppTerm({ tag: "NatElim" }));
 
-export const Eq: () => AppTerm = () => toAppTerm(attachPos({ tag: "Eq" }));
+export const Eq: () => AppTerm = () => attachPos(toAppTerm({ tag: "Eq" }));
 
-export const Refl: () => AppTerm = () => toAppTerm(attachPos({ tag: "Refl" }));
+export const Refl: () => AppTerm = () => attachPos(toAppTerm({ tag: "Refl" }));
 
 export const EqElim: () => AppTerm = () =>
-  toAppTerm(attachPos({ tag: "EqElim" }));
+  attachPos(toAppTerm({ tag: "EqElim" }));
 
 ////////////////////////////////////////////////////////////////////////////////
 // Pretty-printing
